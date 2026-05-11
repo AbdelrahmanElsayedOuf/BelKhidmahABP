@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\DUBAI STORE\\\\Downloads\\\\BelKhidmah\\\\9.4.2\\\\aspnet-core\" -Depth 2)",
+      "Bash(Select-Object FullName)",
+      "Bash(grep \"\\\\.cs$\")",
+      "PowerShell(dotnet tool install *)"
+    ]
+  }
+}
