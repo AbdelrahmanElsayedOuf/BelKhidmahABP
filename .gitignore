@@ -254,3 +254,4 @@ paket-files/
 src/BelKhidmah.Web.Mvc/secrets.json
 src/BelKhidmah.Web.Host/secrets.json
 src/BelKhidmah.Migrator/secrets.json
+src/BelKhidmah.Web.Host/App_Data/Logs/
