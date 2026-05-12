@@ -4,7 +4,14 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\DUBAI STORE\\\\Downloads\\\\BelKhidmah\\\\9.4.2\\\\aspnet-core\" -Depth 2)",
       "Bash(Select-Object FullName)",
       "Bash(grep \"\\\\.cs$\")",
-      "PowerShell(dotnet tool install *)"
+      "PowerShell(dotnet tool install *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(xargs grep *)",
+      "Bash(xargs cat *)",
+      "Bash(dotnet ef *)",
+      "Bash(dotnet tool *)",
+      "Bash(where dotnet *)"
     ]
   }
 }

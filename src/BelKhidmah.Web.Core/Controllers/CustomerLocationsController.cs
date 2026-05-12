@@ -3,13 +3,14 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 
 namespace BelKhidmah.Controllers
 {
     [Route("api/customerlocations")]
     public class CustomerLocationsController : BelKhidmahProxyControllerBase
     {
-        public CustomerLocationsController(IHttpClientFactory factory) : base(factory) { }
+        public CustomerLocationsController(IHttpClientFactory factory, IConfiguration configuration) : base(factory, configuration) { }
 
         [HttpGet("Get")]
         public Task<IActionResult> Get()

@@ -31,14 +31,14 @@ namespace BelKhidmah.Otp
             _settingManager = settingManager;
         }
 
-        public async Task SendAsync(string emailOrPhone)
+        public async Task SendAsync(string storageKey, string template = null, string deliverTo = null)
         {
             var code = _rng.Next(100000, 999999).ToString();
 
             await _otpRepository.InsertAsync(new OtpCode
             {
                 Id = Guid.NewGuid(),
-                EmailOrPhone = emailOrPhone.ToLowerInvariant(),
+                EmailOrPhone = storageKey.ToLowerInvariant(),
                 Code = code,
                 ExpiresAt = DateTime.UtcNow.AddMinutes(ExpiryMinutes),
                 IsUsed = false,
@@ -49,7 +49,13 @@ namespace BelKhidmah.Otp
             var method = Enum.TryParse<OtpDeliveryMethod>(methodValue, true, out var parsed) ? parsed : OtpDeliveryMethod.Email;
 
             IOtpSender sender = method == OtpDeliveryMethod.Sms ? _smsSender : _emailSender;
-            await sender.SendAsync(emailOrPhone, code);
+            await sender.SendAsync(deliverTo ?? storageKey, code, template);
+        }
+
+        public async Task<OtpDeliveryMethod> GetDeliveryMethodAsync()
+        {
+            var value = await _settingManager.GetSettingValueAsync(AppSettingNames.OtpDeliveryMethod);
+            return Enum.TryParse<OtpDeliveryMethod>(value, true, out var parsed) ? parsed : OtpDeliveryMethod.Email;
         }
 
         public async Task<bool> VerifyAsync(string emailOrPhone, string code)

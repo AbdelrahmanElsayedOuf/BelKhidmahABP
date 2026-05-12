@@ -2,13 +2,14 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 
 namespace BelKhidmah.Controllers
 {
     [Route("api/bookings")]
     public class BookingsController : BelKhidmahProxyControllerBase
     {
-        public BookingsController(IHttpClientFactory factory) : base(factory) { }
+        public BookingsController(IHttpClientFactory factory, IConfiguration configuration) : base(factory, configuration) { }
 
         [HttpPost("Create")]
         public async Task<IActionResult> Create()

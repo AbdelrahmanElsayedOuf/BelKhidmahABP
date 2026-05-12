@@ -4,6 +4,7 @@ using BelKhidmah.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BelKhidmah.Migrations
 {
     [DbContext(typeof(BelKhidmahDbContext))]
-    partial class BelKhidmahDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260512134039_AddExternalCustomerIdToUsers")]
+    partial class AddExternalCustomerIdToUsers
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

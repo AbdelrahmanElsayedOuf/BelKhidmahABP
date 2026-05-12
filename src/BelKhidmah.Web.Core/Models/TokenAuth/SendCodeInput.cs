@@ -5,7 +5,8 @@ namespace BelKhidmah.Models.TokenAuth
     public class SendCodeInput
     {
         [Required]
-        [MaxLength(256)]
-        public string EmailOrPhone { get; set; }
+        [Phone]
+        [MaxLength(32)]
+        public string PhoneNumber { get; set; }
     }
 }

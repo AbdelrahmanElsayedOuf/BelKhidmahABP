@@ -1,0 +1,70 @@
+using System;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Threading.Tasks;
+using Abp.Dependency;
+using Castle.Core.Logging;
+using Microsoft.Extensions.Configuration;
+
+namespace BelKhidmah.Customers
+{
+    public class ExternalCustomerService : ITransientDependency
+    {
+        public ILogger Logger { get; set; } = NullLogger.Instance;
+
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly string _apiKey;
+
+        public ExternalCustomerService(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+        {
+            _httpClientFactory = httpClientFactory;
+            _apiKey = configuration["ExternalApi:ApiKey"];
+        }
+
+        public async Task<Guid?> CreateIfNotExistsAsync(Guid? existingId, string name, string phone, string email)
+        {
+            if (existingId.HasValue)
+                return existingId;
+
+            var client = _httpClientFactory.CreateClient("ExternalApi");
+
+            var request = new HttpRequestMessage(HttpMethod.Post, "en/api/Customer")
+            {
+                Content = JsonContent.Create(new { Name = name, Phone = phone, Email = email })
+            };
+
+            if (!string.IsNullOrEmpty(_apiKey))
+                request.Headers.TryAddWithoutValidation("X-API-Key", _apiKey);
+
+            var response = await client.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Logger.WarnFormat("[ExternalCustomer] Create failed. Status={0}", (int)response.StatusCode);
+                return null;
+            }
+
+            var x = await response.Content.ReadAsStringAsync();
+            var result = await response.Content.ReadFromJsonAsync<ExternalCreateResponse>();
+
+            if (result?.Success != true || result.Result?.Id == null)
+            {
+                Logger.WarnFormat("[ExternalCustomer] Response indicated failure or missing Id.");
+                return null;
+            }
+
+            return result.Result.Id;
+        }
+
+        private class ExternalCreateResponse
+        {
+            public bool Success { get; set; }
+            public ExternalCustomerResult Result { get; set; }
+        }
+
+        private class ExternalCustomerResult
+        {
+            public Guid? Id { get; set; }
+        }
+    }
+}

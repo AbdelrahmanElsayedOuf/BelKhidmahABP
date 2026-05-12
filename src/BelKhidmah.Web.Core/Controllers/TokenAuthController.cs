@@ -1,18 +1,21 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Abp.Authorization;
 using Abp.Authorization.Users;
+using Abp.Domain.Uow;
 using Abp.MultiTenancy;
 using Abp.Runtime.Security;
 using Abp.UI;
 using BelKhidmah.Authentication.JwtBearer;
 using BelKhidmah.Authorization;
 using BelKhidmah.Authorization.Users;
+using BelKhidmah.Customers;
 using BelKhidmah.Models.TokenAuth;
 using BelKhidmah.MultiTenancy;
 using BelKhidmah.Otp;
@@ -29,6 +32,7 @@ namespace BelKhidmah.Controllers
         private readonly OtpManager _otpManager;
         private readonly UserManager _userManager;
         private readonly UserRegistrationManager _userRegistrationManager;
+        private readonly ExternalCustomerService _externalCustomerService;
 
         public TokenAuthController(
             LogInManager logInManager,
@@ -37,7 +41,8 @@ namespace BelKhidmah.Controllers
             TokenAuthConfiguration configuration,
             OtpManager otpManager,
             UserManager userManager,
-            UserRegistrationManager userRegistrationManager)
+            UserRegistrationManager userRegistrationManager,
+            ExternalCustomerService externalCustomerService)
         {
             _logInManager = logInManager;
             _tenantCache = tenantCache;
@@ -46,6 +51,7 @@ namespace BelKhidmah.Controllers
             _otpManager = otpManager;
             _userManager = userManager;
             _userRegistrationManager = userRegistrationManager;
+            _externalCustomerService = externalCustomerService;
         }
 
         [HttpPost]
@@ -57,7 +63,9 @@ namespace BelKhidmah.Controllers
                 GetTenancyNameOrNull()
             );
 
-            var accessToken = CreateAccessToken(CreateJwtClaims(loginResult.Identity));
+            var claims   = CreateJwtClaims(loginResult.Identity);
+            AddCustomerIdClaim(claims, loginResult.User.ExternalCustomerId);
+            var accessToken = CreateAccessToken(claims);
 
             return new AuthenticateResultModel
             {
@@ -71,22 +79,33 @@ namespace BelKhidmah.Controllers
         [HttpPost]
         public async Task<bool> Register([FromBody] MobileRegisterInput model)
         {
-            if (string.IsNullOrWhiteSpace(model.EmailAddress) && string.IsNullOrWhiteSpace(model.PhoneNumber))
-                throw new UserFriendlyException("EmailAddress or PhoneNumber is required.");
+            var deliveryMethod = await _otpManager.GetDeliveryMethodAsync();
 
-            var userName = model.EmailAddress ?? model.PhoneNumber;
-            var email = model.EmailAddress ?? $"{model.PhoneNumber}@belkhidmah.local";
+            if (deliveryMethod == OtpDeliveryMethod.Sms && string.IsNullOrWhiteSpace(model.PhoneNumber))
+                throw new UserFriendlyException("PhoneNumber is required.");
+            if (deliveryMethod == OtpDeliveryMethod.Email && string.IsNullOrWhiteSpace(model.EmailAddress))
+                throw new UserFriendlyException("EmailAddress is required.");
+
+            var userName = model.PhoneNumber;
+            var email    = model.EmailAddress ?? $"{model.PhoneNumber}@belkhidmah.local";
 
             var existingUser = await _userManager.FindByNameAsync(userName);
             if (existingUser != null)
                 throw new UserFriendlyException("A user with this email or phone already exists.");
+
+            if (!string.IsNullOrWhiteSpace(model.EmailAddress))
+            {
+                var existingEmail = await _userManager.FindByEmailAsync(model.EmailAddress);
+                if (existingEmail != null)
+                    throw new UserFriendlyException("A user with this email already exists.");
+            }
 
             var user = await _userRegistrationManager.RegisterAsync(
                 model.Name,
                 model.Surname ?? model.Name,
                 email,
                 userName,
-                true
+                false
             );
 
             if (!string.IsNullOrWhiteSpace(model.PhoneNumber))
@@ -95,20 +114,45 @@ namespace BelKhidmah.Controllers
                 await _userManager.UpdateAsync(user);
             }
 
+            var recipient = deliveryMethod == OtpDeliveryMethod.Email
+                ? model.EmailAddress
+                : model.PhoneNumber;
+
+            await _otpManager.SendAsync(recipient, "RegisterationVerificationCode");
+
             return true;
         }
 
         [HttpPost]
-        public async Task<bool> SendCode([FromBody] SendCodeInput model)
+        public async Task<LoginResultDto> Login([FromBody] SendCodeInput model)
         {
-            var user = await _userManager.FindByNameAsync(model.EmailOrPhone)
-                       ?? await _userManager.FindByEmailAsync(model.EmailOrPhone);
+            User user;
+            using (CurrentUnitOfWork.DisableFilter(AbpDataFilters.MayHaveTenant))
+                user = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == model.PhoneNumber);
 
             if (user == null)
-                throw new UserFriendlyException("No account found for the provided email or phone.");
+                throw new UserFriendlyException("No account found for the provided phone number.");
 
-            await _otpManager.SendAsync(model.EmailOrPhone);
-            return true;
+            var deliveryMethod = await _otpManager.GetDeliveryMethodAsync();
+
+            var isVerified = deliveryMethod == OtpDeliveryMethod.Email
+                ? user.IsEmailConfirmed
+                : user.IsPhoneNumberConfirmed;
+
+            if (!user.IsActive || !isVerified)
+                throw new UserFriendlyException("Account is not verified. Please complete registration first.");
+
+            // OTP always keyed by phone so VerifyCode only ever needs phone.
+            // When channel is Email, deliver to the user's email address instead.
+            var deliverTo = deliveryMethod == OtpDeliveryMethod.Email ? user.EmailAddress : null;
+
+            await _otpManager.SendAsync(user.PhoneNumber, "LoginCode", deliverTo);
+
+            var message = deliveryMethod == OtpDeliveryMethod.Email
+                ? L("OtpSentToEmail", user.EmailAddress)
+                : L("OtpSentToPhone", user.PhoneNumber);
+
+            return new LoginResultDto { Message = message };
         }
 
         [HttpPost]
@@ -116,14 +160,36 @@ namespace BelKhidmah.Controllers
         {
             await _otpManager.VerifyAsync(model.EmailOrPhone, model.Code);
 
-            var user = await _userManager.FindByNameAsync(model.EmailOrPhone)
-                       ?? await _userManager.FindByEmailAsync(model.EmailOrPhone);
+            User user;
+            using (CurrentUnitOfWork.DisableFilter(AbpDataFilters.MayHaveTenant))
+                user = await _userManager.FindByNameAsync(model.EmailOrPhone)
+                       ?? await _userManager.FindByEmailAsync(model.EmailOrPhone)
+                       ?? await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == model.EmailOrPhone);
 
             if (user == null)
                 throw new UserFriendlyException("User not found.");
 
-            var identity = BuildIdentityForUser(user);
-            var accessToken = CreateAccessToken(CreateJwtClaims(identity));
+            var isPhone = !model.EmailOrPhone.Contains('@');
+            if (isPhone)
+                user.IsPhoneNumberConfirmed = true;
+            else
+                user.IsEmailConfirmed = true;
+
+            user.IsActive = true;
+
+            user.ExternalCustomerId = await _externalCustomerService.CreateIfNotExistsAsync(
+                user.ExternalCustomerId,
+                user.FullName,
+                user.PhoneNumber,
+                user.EmailAddress
+            );
+
+            await _userManager.UpdateAsync(user);
+
+            var identity   = BuildIdentityForUser(user);
+            var claims     = CreateJwtClaims(identity);
+            AddCustomerIdClaim(claims, user.ExternalCustomerId);
+            var accessToken = CreateAccessToken(claims);
 
             return new AuthenticateResultModel
             {
@@ -134,7 +200,13 @@ namespace BelKhidmah.Controllers
             };
         }
 
-        private static System.Security.Claims.ClaimsIdentity BuildIdentityForUser(Authorization.Users.User user)
+        private static void AddCustomerIdClaim(List<Claim> claims, Guid? externalCustomerId)
+        {
+            if (externalCustomerId.HasValue)
+                claims.Add(new Claim("CustomerId", externalCustomerId.Value.ToString()));
+        }
+
+        private static ClaimsIdentity BuildIdentityForUser(Authorization.Users.User user)
         {
             var claims = new List<Claim>
             {
@@ -142,17 +214,15 @@ namespace BelKhidmah.Controllers
                 new Claim(ClaimTypes.Name, user.UserName)
             };
             if (user.TenantId.HasValue)
-                claims.Add(new Claim(Abp.Runtime.Security.AbpClaimTypes.TenantId, user.TenantId.Value.ToString()));
+                claims.Add(new Claim(AbpClaimTypes.TenantId, user.TenantId.Value.ToString()));
 
-            return new System.Security.Claims.ClaimsIdentity(claims, "OtpAuth");
+            return new ClaimsIdentity(claims, "OtpAuth");
         }
 
         private string GetTenancyNameOrNull()
         {
             if (!AbpSession.TenantId.HasValue)
-            {
                 return null;
-            }
 
             return _tenantCache.GetOrNull(AbpSession.TenantId.Value)?.TenancyName;
         }
@@ -188,10 +258,9 @@ namespace BelKhidmah.Controllers
 
         private static List<Claim> CreateJwtClaims(ClaimsIdentity identity)
         {
-            var claims = identity.Claims.ToList();
+            var claims      = identity.Claims.ToList();
             var nameIdClaim = claims.First(c => c.Type == ClaimTypes.NameIdentifier);
 
-            // Specifically add the jti (random nonce), iat (issued timestamp), and sub (subject/user) claims.
             claims.AddRange(new[]
             {
                 new Claim(JwtRegisteredClaimNames.Sub, nameIdClaim.Value),

@@ -1,24 +1,35 @@
 using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 
 namespace BelKhidmah.Controllers
 {
     public abstract class BelKhidmahProxyControllerBase : BelKhidmahControllerBase
     {
-        private static readonly string[] ForwardedHeaders = { "language", "customerId", "tenant" };
+        private static readonly string[] ForwardedHeaders = { "language", "tenant" };
 
         protected readonly HttpClient Client;
+        private readonly string _apiKey;
 
-        protected BelKhidmahProxyControllerBase(IHttpClientFactory factory)
+        protected BelKhidmahProxyControllerBase(IHttpClientFactory factory, IConfiguration configuration)
         {
             Client = factory.CreateClient("ExternalApi");
+            _apiKey = configuration["ExternalApi:ApiKey"];
+        }
+
+        private string ResolveLanguage()
+        {
+            var acceptLanguage = Request.Headers["Accept-Language"].ToString();
+            return acceptLanguage.StartsWith("ar", System.StringComparison.OrdinalIgnoreCase) ? "ar" : "en";
         }
 
         protected HttpRequestMessage BuildRequest(HttpMethod method, string relativePath)
         {
+            var lang = ResolveLanguage();
             var qs = Request.QueryString.Value;
-            var uri = string.IsNullOrEmpty(qs) ? relativePath : relativePath + qs;
+            var uri = $"{lang}/{relativePath}";
+            if (!string.IsNullOrEmpty(qs)) uri += qs;
 
             var req = new HttpRequestMessage(method, uri);
 
@@ -27,6 +38,13 @@ namespace BelKhidmah.Controllers
                 if (Request.Headers.TryGetValue(header, out var value))
                     req.Headers.TryAddWithoutValidation(header, (string)value);
             }
+
+            if (!string.IsNullOrEmpty(_apiKey))
+                req.Headers.TryAddWithoutValidation("X-API-Key", _apiKey);
+
+            var customerId = User.FindFirst("CustomerId")?.Value;
+            if (!string.IsNullOrEmpty(customerId))
+                req.Headers.TryAddWithoutValidation("CustomerId", customerId);
 
             return req;
         }
