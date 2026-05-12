@@ -28,7 +28,7 @@ namespace BelKhidmah.Customers
 
             var client = _httpClientFactory.CreateClient("ExternalApi");
 
-            var request = new HttpRequestMessage(HttpMethod.Post, "en/api/Customer")
+            var request = new HttpRequestMessage(HttpMethod.Post, "en/api/Customers/Create")
             {
                 Content = JsonContent.Create(new { Name = name, Phone = phone, Email = email })
             };
@@ -47,24 +47,19 @@ namespace BelKhidmah.Customers
             var x = await response.Content.ReadAsStringAsync();
             var result = await response.Content.ReadFromJsonAsync<ExternalCreateResponse>();
 
-            if (result?.Success != true || result.Result?.Id == null)
+            if (result?.Success != true || result.Data == Guid.Empty)
             {
                 Logger.WarnFormat("[ExternalCustomer] Response indicated failure or missing Id.");
                 return null;
             }
 
-            return result.Result.Id;
+            return result.Data;
         }
 
         private class ExternalCreateResponse
         {
             public bool Success { get; set; }
-            public ExternalCustomerResult Result { get; set; }
-        }
-
-        private class ExternalCustomerResult
-        {
-            public Guid? Id { get; set; }
+            public Guid Data { get; set; }
         }
     }
 }
