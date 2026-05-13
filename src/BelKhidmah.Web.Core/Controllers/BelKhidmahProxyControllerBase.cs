@@ -1,10 +1,12 @@
 using System.Net.Http;
 using System.Threading.Tasks;
+using Abp.Web.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 
 namespace BelKhidmah.Controllers
 {
+    [WrapResult(false, false)]
     public abstract class BelKhidmahProxyControllerBase : BelKhidmahControllerBase
     {
         private static readonly string[] ForwardedHeaders = { "language", "tenant" };
@@ -27,8 +29,8 @@ namespace BelKhidmah.Controllers
         protected HttpRequestMessage BuildRequest(HttpMethod method, string relativePath)
         {
             var lang = ResolveLanguage();
-            var qs = Request.QueryString.Value;
-            var uri = $"{lang}/{relativePath}";
+            var qs   = Request.QueryString.Value;
+            var uri  = $"{lang}/{relativePath}";
             if (!string.IsNullOrEmpty(qs)) uri += qs;
 
             var req = new HttpRequestMessage(method, uri);
@@ -52,11 +54,14 @@ namespace BelKhidmah.Controllers
         protected async Task<IActionResult> ProxyAsync(HttpRequestMessage req)
         {
             var response = await Client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
-            var content = await response.Content.ReadAsStringAsync();
+            var content  = await response.Content.ReadAsStringAsync();
 
-            return StatusCode((int)response.StatusCode,
-                System.Text.Json.JsonSerializer.Deserialize<object>(
-                    content.Length > 0 ? content : "null"));
+            return new ContentResult
+            {
+                StatusCode  = (int)response.StatusCode,
+                ContentType = "application/json",
+                Content     = content.Length > 0 ? content : "null"
+            };
         }
     }
 }

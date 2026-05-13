@@ -77,7 +77,7 @@ namespace BelKhidmah.Controllers
         }
 
         [HttpPost]
-        public async Task<bool> Register([FromBody] MobileRegisterInput model)
+        public async Task<LoginResultDto> Register([FromBody] MobileRegisterInput model)
         {
             var deliveryMethod = await _otpManager.GetDeliveryMethodAsync();
 
@@ -114,13 +114,45 @@ namespace BelKhidmah.Controllers
                 await _userManager.UpdateAsync(user);
             }
 
-            var recipient = deliveryMethod == OtpDeliveryMethod.Email
-                ? model.EmailAddress
-                : model.PhoneNumber;
+            var deliverTo = deliveryMethod == OtpDeliveryMethod.Email ? model.EmailAddress : null;
 
-            await _otpManager.SendAsync(recipient, "RegisterationVerificationCode");
+            await _otpManager.SendAsync(model.PhoneNumber, "RegisterationVerificationCode", deliverTo);
 
-            return true;
+            var message = deliveryMethod == OtpDeliveryMethod.Email
+                ? L("OtpSentToEmail", model.EmailAddress)
+                : L("OtpSentToPhone", model.PhoneNumber);
+
+            return new LoginResultDto { Message = message };
+        }
+
+        [HttpPost]
+        public async Task<LoginResultDto> ResendVerificationCode([FromBody] SendCodeInput model)
+        {
+            User user;
+            using (CurrentUnitOfWork.DisableFilter(AbpDataFilters.MayHaveTenant))
+                user = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == model.PhoneNumber);
+
+            if (user == null)
+                throw new UserFriendlyException("No account found for the provided phone number.");
+
+            var deliveryMethod = await _otpManager.GetDeliveryMethodAsync();
+
+            var isVerified = deliveryMethod == OtpDeliveryMethod.Email
+                ? user.IsEmailConfirmed
+                : user.IsPhoneNumberConfirmed;
+
+            if (user.IsActive && isVerified)
+                throw new UserFriendlyException("Account is already verified. Please use the login endpoint.");
+
+            var deliverTo = deliveryMethod == OtpDeliveryMethod.Email ? user.EmailAddress : null;
+
+            await _otpManager.SendAsync(user.PhoneNumber, "RegisterationVerificationCode", deliverTo);
+
+            var message = deliveryMethod == OtpDeliveryMethod.Email
+                ? L("OtpSentToEmail", user.EmailAddress)
+                : L("OtpSentToPhone", user.PhoneNumber);
+
+            return new LoginResultDto { Message = message };
         }
 
         [HttpPost]
@@ -169,6 +201,16 @@ namespace BelKhidmah.Controllers
             if (user == null)
                 throw new UserFriendlyException("User not found.");
 
+            var externalId = await _externalCustomerService.CreateIfNotExistsAsync(
+                user.ExternalCustomerId,
+                user.FullName,
+                user.PhoneNumber,
+                user.EmailAddress
+            );
+
+            if (!externalId.HasValue)
+                throw new UserFriendlyException("Could not verify your account in the system. Please try again later.");
+
             var isPhone = !model.EmailOrPhone.Contains('@');
             if (isPhone)
                 user.IsPhoneNumberConfirmed = true;
@@ -176,19 +218,13 @@ namespace BelKhidmah.Controllers
                 user.IsEmailConfirmed = true;
 
             user.IsActive = true;
-
-            user.ExternalCustomerId = await _externalCustomerService.CreateIfNotExistsAsync(
-                user.ExternalCustomerId,
-                user.FullName,
-                user.PhoneNumber,
-                user.EmailAddress
-            );
+            user.ExternalCustomerId = externalId;
 
             await _userManager.UpdateAsync(user);
 
             var identity   = BuildIdentityForUser(user);
             var claims     = CreateJwtClaims(identity);
-            AddCustomerIdClaim(claims, user.ExternalCustomerId);
+            AddCustomerIdClaim(claims, externalId);
             var accessToken = CreateAccessToken(claims);
 
             return new AuthenticateResultModel
