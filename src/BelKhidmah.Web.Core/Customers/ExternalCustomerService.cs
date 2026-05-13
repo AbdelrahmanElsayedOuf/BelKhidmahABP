@@ -28,21 +28,36 @@ namespace BelKhidmah.Customers
 
             var client = _httpClientFactory.CreateClient("ExternalApi");
 
-            var request = new HttpRequestMessage(HttpMethod.Post, "en/api/Customers/Create")
+            const int maxAttempts = 3;
+            HttpResponseMessage response = null;
+
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                Content = JsonContent.Create(new { Name = name, Phone = phone, Email = email })
-            };
+                try
+                {
+                    var request = new HttpRequestMessage(HttpMethod.Post, "en/api/Customers/Create")
+                    {
+                        Content = JsonContent.Create(new { Name = name, Phone = phone, Email = email })
+                    };
 
-            if (!string.IsNullOrEmpty(_apiKey))
-                request.Headers.TryAddWithoutValidation("X-API-Key", _apiKey);
+                    if (!string.IsNullOrEmpty(_apiKey))
+                        request.Headers.TryAddWithoutValidation("X-API-Key", _apiKey);
 
-            var response = await client.SendAsync(request);
+                    response = await client.SendAsync(request);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                Logger.WarnFormat("[ExternalCustomer] Create failed. Status={0}", (int)response.StatusCode);
-                return null;
+                    if (response.IsSuccessStatusCode)
+                        break;
+
+                    Logger.WarnFormat("[ExternalCustomer] Create failed (attempt {0}/{1}). Status={2}", attempt, maxAttempts, (int)response.StatusCode);
+                }
+                catch (Exception ex)
+                {
+                    Logger.WarnFormat("[ExternalCustomer] Create threw on attempt {0}/{1}: {2}", attempt, maxAttempts, ex.Message);
+                }
             }
+
+            if (response == null || !response.IsSuccessStatusCode)
+                return null;
 
             var x = await response.Content.ReadAsStringAsync();
             var result = await response.Content.ReadFromJsonAsync<ExternalCreateResponse>();
