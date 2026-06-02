@@ -211,11 +211,11 @@ namespace BelKhidmah.Controllers
             if (!externalId.HasValue)
                 throw new UserFriendlyException("Could not verify your account in the system. Please try again later.");
 
-            var isPhone = !model.EmailOrPhone.Contains('@');
-            if (isPhone)
-                user.IsPhoneNumberConfirmed = true;
-            else
+            var deliveryMethod = await _otpManager.GetDeliveryMethodAsync();
+            if (deliveryMethod == OtpDeliveryMethod.Email)
                 user.IsEmailConfirmed = true;
+            else
+                user.IsPhoneNumberConfirmed = true;
 
             user.IsActive = true;
             user.ExternalCustomerId = externalId;
