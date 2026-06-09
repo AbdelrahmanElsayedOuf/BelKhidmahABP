@@ -141,9 +141,6 @@ namespace BelKhidmah.Controllers
                 ? user.IsEmailConfirmed
                 : user.IsPhoneNumberConfirmed;
 
-            if (user.IsActive && isVerified)
-                throw new UserFriendlyException("Account is already verified. Please use the login endpoint.");
-
             var deliverTo = deliveryMethod == OtpDeliveryMethod.Email ? user.EmailAddress : null;
 
             await _otpManager.SendAsync(user.PhoneNumber, "RegisterationVerificationCode", deliverTo);
@@ -163,7 +160,7 @@ namespace BelKhidmah.Controllers
                 user = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == model.PhoneNumber);
 
             if (user == null)
-                throw new UserFriendlyException("No account found for the provided phone number.");
+                throw new UserFriendlyException(300, L("UserMustRegisterFirst"));
 
             var deliveryMethod = await _otpManager.GetDeliveryMethodAsync();
 

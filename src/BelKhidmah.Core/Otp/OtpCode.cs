@@ -5,7 +5,7 @@ namespace BelKhidmah.Otp
 {
     public class OtpCode : Entity<Guid>
     {
-        public const int CodeLength = 6;
+        public const int CodeLength = 4;
         public const int MaxRecipientLength = 256;
 
         public string EmailOrPhone { get; set; }

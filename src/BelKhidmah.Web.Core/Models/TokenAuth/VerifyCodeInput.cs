@@ -9,7 +9,7 @@ namespace BelKhidmah.Models.TokenAuth
         public string EmailOrPhone { get; set; }
 
         [Required]
-        [StringLength(6, MinimumLength = 6)]
+        [StringLength(4, MinimumLength = 4)]
         public string Code { get; set; }
     }
 }

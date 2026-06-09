@@ -122,5 +122,6 @@
     <text name="403PageButton">Go back to Dashboard</text>
     <text name="OtpSentToEmail" value="A verification code has been sent to your email address {0}" />
     <text name="OtpSentToPhone" value="A verification code has been sent via SMS to {0}" />
+    <text name="UserMustRegisterFirst" value="You do not have an account. Please register first." />
   </texts>
 </localizationDictionary>

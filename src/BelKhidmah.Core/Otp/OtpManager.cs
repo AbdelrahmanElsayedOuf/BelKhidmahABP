@@ -5,6 +5,7 @@ using Abp.Configuration;
 using Abp.Domain.Repositories;
 using Abp.Domain.Services;
 using Abp.UI;
+using BelKhidmah.Authorization.Users;
 using BelKhidmah.Configuration;
 
 namespace BelKhidmah.Otp
@@ -15,17 +16,20 @@ namespace BelKhidmah.Otp
         private const int ExpiryMinutes = 5;
 
         private readonly IRepository<OtpCode, Guid> _otpRepository;
+        private readonly IRepository<User, long> _userRepository;
         private readonly IEmailOtpSender _emailSender;
         private readonly ISmsOtpSender _smsSender;
         private readonly ISettingManager _settingManager;
 
         public OtpManager(
             IRepository<OtpCode, Guid> otpRepository,
+            IRepository<User, long> userRepository,
             IEmailOtpSender emailSender,
             ISmsOtpSender smsSender,
             ISettingManager settingManager)
         {
             _otpRepository = otpRepository;
+            _userRepository = userRepository;
             _emailSender = emailSender;
             _smsSender = smsSender;
             _settingManager = settingManager;
@@ -33,7 +37,7 @@ namespace BelKhidmah.Otp
 
         public async Task SendAsync(string storageKey, string template = null, string deliverTo = null)
         {
-            var code = _rng.Next(100000, 999999).ToString();
+            var code = _rng.Next(1000, 10000).ToString();
 
             await _otpRepository.InsertAsync(new OtpCode
             {
