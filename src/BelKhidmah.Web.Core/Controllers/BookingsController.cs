@@ -15,6 +15,7 @@ namespace BelKhidmah.Controllers
         public async Task<IActionResult> Create()
         {
             var req = BuildRequest(HttpMethod.Post, "api/bookings/Create");
+
             req.Content = await ReadBodyAsJsonContent();
             return await ProxyAsync(req);
         }
