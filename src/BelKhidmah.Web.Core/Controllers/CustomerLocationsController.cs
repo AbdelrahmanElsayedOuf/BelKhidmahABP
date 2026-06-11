@@ -23,6 +23,14 @@ namespace BelKhidmah.Controllers
         public Task<IActionResult> GetDefault()
             => ProxyAsync(BuildRequest(HttpMethod.Get, "api/customerlocations/GetDefault"));
 
+        [HttpPut("SetDefault/{locationId}")]
+        public Task<IActionResult> SetDefault(string locationId)
+            => ProxyAsync(BuildRequest(HttpMethod.Put, $"api/customerlocations/SetDefault/{locationId}"));
+
+        [HttpDelete("Delete/{locationId}")]
+        public Task<IActionResult> Delete(string locationId)
+            => ProxyAsync(BuildRequest(HttpMethod.Delete, $"api/customerlocations/Delete/{locationId}"));
+
         [HttpPost("Create")]
         public async Task<IActionResult> Create()
         {
