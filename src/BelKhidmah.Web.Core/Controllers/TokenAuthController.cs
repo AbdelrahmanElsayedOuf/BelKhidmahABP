@@ -168,12 +168,21 @@ namespace BelKhidmah.Controllers
                 ? user.IsEmailConfirmed
                 : user.IsPhoneNumberConfirmed;
 
-            if (!user.IsActive || !isVerified)
-                throw new UserFriendlyException("Account is not verified. Please complete registration first.");
+            if (!user.IsActive)
+                throw new UserFriendlyException(L("AccountIsNotActive"));
 
             // OTP always keyed by phone so VerifyCode only ever needs phone.
             // When channel is Email, deliver to the user's email address instead.
             var deliverTo = deliveryMethod == OtpDeliveryMethod.Email ? user.EmailAddress : null;
+
+            if (!isVerified)
+            {
+                await _otpManager.SendAsync(user.PhoneNumber, "RegisterationVerificationCode", deliverTo);
+                var verifyMessage = deliveryMethod == OtpDeliveryMethod.Email
+                    ? L("OtpSentToEmail", user.EmailAddress)
+                    : L("OtpSentToPhone", user.PhoneNumber);
+                return new LoginResultDto { Message = verifyMessage, RequiresVerification = true };
+            }
 
             await _otpManager.SendAsync(user.PhoneNumber, "LoginCode", deliverTo);
 
