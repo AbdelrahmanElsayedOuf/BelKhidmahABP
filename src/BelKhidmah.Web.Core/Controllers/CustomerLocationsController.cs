@@ -5,11 +5,13 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 
 namespace BelKhidmah.Controllers
 {
+    [Authorize]
     [Route("api/customerlocations")]
     public class CustomerLocationsController : BelKhidmahProxyControllerBase
     {
