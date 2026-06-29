@@ -26,7 +26,7 @@ namespace BelKhidmah.Controllers
             return await ProxyAsync(req);
         }
 
-        [HttpGet]
+        [HttpGet("items")]
         public async Task<IActionResult> Items(int sector , int page , int pageSize)
         {
             var req = BuildRequest(HttpMethod.Get, "api/Bookings/Items");
