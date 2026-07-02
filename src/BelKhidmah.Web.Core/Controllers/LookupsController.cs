@@ -21,5 +21,9 @@ namespace BelKhidmah.Controllers
         [HttpGet("nationalities")]
         public Task<IActionResult> GetNationalities()
             => ProxyAsync(BuildRequest(HttpMethod.Get, "api/Lookups/Nationalities"));
+
+        [HttpGet("inqueryTypes")]
+        public Task<IActionResult> GetInqueryTypes()
+            => ProxyAsync(BuildRequest(HttpMethod.Get, "api/Lookups/InqueryTypes"));
     }
 }
