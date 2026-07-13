@@ -72,6 +72,23 @@ namespace BelKhidmah.Controllers
             return result;
         }
 
+        [HttpPost("image")]
+        public async Task<IActionResult> UploadImage()
+        {
+            var req     = BuildRequest(HttpMethod.Post, "api/Profile/image");
+            var content = new MultipartFormDataContent();
+            var file    = Request.Form.Files.GetFile("File");
+            if (file != null)
+            {
+                var stream     = file.OpenReadStream();
+                var fileContent = new StreamContent(stream);
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+                content.Add(fileContent, "File", file.FileName);
+            }
+            req.Content = content;
+            return await ProxyAsync(req);
+        }
+
         [HttpDelete]
         public async Task<IActionResult> Delete()
         {
