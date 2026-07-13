@@ -37,6 +37,7 @@ namespace BelKhidmah
             Configuration.Settings.Providers.Add<AppSettingProvider>();
             
             Configuration.Localization.Languages.Add(new LanguageInfo("fa", "فارسی", "famfamfam-flags ir"));
+            Configuration.Localization.Languages.Add(new LanguageInfo("ar", "العربية", "famfamfam-flags sa"));
             
             Configuration.Settings.SettingEncryptionConfiguration.DefaultPassPhrase = BelKhidmahConsts.DefaultPassPhrase;
             SimpleStringCipher.DefaultPassPhrase = BelKhidmahConsts.DefaultPassPhrase;
