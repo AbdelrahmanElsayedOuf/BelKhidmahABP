@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Abp.Configuration;
@@ -53,7 +54,14 @@ namespace BelKhidmah.Otp
             var method = Enum.TryParse<OtpDeliveryMethod>(methodValue, true, out var parsed) ? parsed : OtpDeliveryMethod.Email;
 
             IOtpSender sender = method == OtpDeliveryMethod.Sms ? _smsSender : _emailSender;
-            await sender.SendAsync(deliverTo ?? storageKey, code, template);
+            try
+            {
+                await sender.SendAsync(deliverTo ?? storageKey, code, template);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("Failed to send OTP; continuing without throwing.", ex);
+            }
         }
 
         public async Task<OtpDeliveryMethod> GetDeliveryMethodAsync()
@@ -62,8 +70,37 @@ namespace BelKhidmah.Otp
             return Enum.TryParse<OtpDeliveryMethod>(value, true, out var parsed) ? parsed : OtpDeliveryMethod.Email;
         }
 
+        public async Task InvalidateActiveOtpsAsync(params string[] storageKeys)
+        {
+            var keys = (storageKeys ?? Array.Empty<string>())
+                .Where(k => !string.IsNullOrWhiteSpace(k))
+                .Select(k => k.ToLowerInvariant())
+                .Distinct()
+                .ToList();
+
+            if (keys.Count == 0)
+                return;
+
+            var records = await _otpRepository.GetAllListAsync(o =>
+                keys.Contains(o.EmailOrPhone) && !o.IsUsed);
+
+            foreach (var record in records)
+            {
+                record.IsUsed = true;
+                await _otpRepository.UpdateAsync(record);
+            }
+        }
+
         public async Task<bool> VerifyAsync(string emailOrPhone, string code)
         {
+            var allowSpecific = await _settingManager.GetSettingValueAsync<bool>(AppSettingNames.AllowSpecificOtpCode);
+            if (allowSpecific)
+            {
+                var specificCode = await _settingManager.GetSettingValueAsync(AppSettingNames.SpecificOtpCode);
+                if (!string.IsNullOrWhiteSpace(specificCode) && code == specificCode)
+                    return true;
+            }
+
             var record = (await _otpRepository.GetAllListAsync(o =>
                 o.EmailOrPhone == emailOrPhone.ToLowerInvariant() &&
                 o.Code == code &&

@@ -31,6 +31,10 @@ namespace BelKhidmah.Controllers
         public Task<IActionResult> Get()
             => ProxyAsync(BuildRequest(HttpMethod.Get, "api/Profile"));
 
+        [HttpGet("Completeness")]
+        public Task<IActionResult> Completeness()
+            => ProxyAsync(BuildRequest(HttpMethod.Get, "api/Profile/Completeness"));
+
         [HttpPut]
         public async Task<IActionResult> Update()
         {
