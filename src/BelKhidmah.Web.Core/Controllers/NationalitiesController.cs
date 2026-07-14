@@ -10,8 +10,8 @@ namespace BelKhidmah.Controllers
     {
         public NationalitiesController(IHttpClientFactory factory, IConfiguration configuration) : base(factory, configuration) { }
 
-        [HttpGet("Get")]
+        [HttpGet]
         public Task<IActionResult> Get()
-            => ProxyAsync(BuildRequest(HttpMethod.Get, "api/Lookups/Nationalities"));
+            => ProxyAsync(BuildRequest(HttpMethod.Get, "api/nationalities"));
     }
 }
