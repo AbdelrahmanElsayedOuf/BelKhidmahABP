@@ -17,5 +17,9 @@ namespace BelKhidmah.Controllers
         [HttpGet("OnlinePay")]
         public Task<IActionResult> OnlinePay()
             => ProxyAsync(BuildRequest(HttpMethod.Get, "api/PurchasedOrder/OnlinePay"));
+
+        [HttpGet("PaymentMethods")]
+        public Task<IActionResult> PaymentMethods()
+            => ProxyAsync(BuildRequest(HttpMethod.Get, "api/PurchasedOrder/PaymentMethods"));
     }
 }

@@ -9,7 +9,7 @@ namespace BelKhidmah.Controllers
     [WrapResult(false, false)]
     public abstract class BelKhidmahProxyControllerBase : BelKhidmahControllerBase
     {
-        private static readonly string[] ForwardedHeaders = { "language", "tenant" };
+        private static readonly string[] ForwardedHeaders = { "language", "tenant", "platform" };
 
         protected readonly HttpClient Client;
         private readonly string _apiKey;
