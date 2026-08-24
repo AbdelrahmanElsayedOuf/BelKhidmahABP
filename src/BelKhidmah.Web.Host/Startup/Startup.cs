@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Net.Http;
 using System.Reflection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -16,6 +17,9 @@ using BelKhidmah.Identity;
 using Abp.AspNetCore.SignalR.Hubs;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
+using Polly;
+using Polly.Extensions.Http;
+using Polly.Timeout;
 using System.IO;
 
 namespace BelKhidmah.Web.Host.Startup
@@ -74,7 +78,11 @@ namespace BelKhidmah.Web.Host.Startup
             {
                 var baseUrl = _appConfiguration["ExternalApi:BaseUrl"];
                 client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
-            });
+                client.Timeout = TimeSpan.FromSeconds(
+                    _appConfiguration.GetValue("ExternalApi:Retry:OverallTimeoutSeconds", 60));
+            })
+            .AddPolicyHandler((sp, req) => BuildExternalApiRetryPolicy(sp, req, _appConfiguration))
+            .AddPolicyHandler(BuildExternalApiPerAttemptTimeoutPolicy(_appConfiguration));
 
             // Configure Abp and Dependency Injection
             services.AddAbpWithoutCreatingServiceProvider<BelKhidmahWebHostModule>(
@@ -122,6 +130,53 @@ namespace BelKhidmah.Web.Host.Startup
                     .GetManifestResourceStream("BelKhidmah.Web.Host.wwwroot.swagger.ui.index.html");
                 options.DisplayRequestDuration(); // Controls the display of the request duration (in milliseconds) for "Try it out" requests.
             }); // URL: /swagger
+        }
+
+        private static IAsyncPolicy<HttpResponseMessage> BuildExternalApiRetryPolicy(
+            IServiceProvider sp, HttpRequestMessage req, IConfiguration cfg)
+        {
+            var maxAttempts = cfg.GetValue("ExternalApi:Retry:MaxAttempts", 3);
+            var baseDelayMs = cfg.GetValue("ExternalApi:Retry:BaseDelayMs", 200);
+            var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("ExternalApiRetry");
+
+            var isIdempotent = req.Method == HttpMethod.Get
+                || req.Method == HttpMethod.Head
+                || req.Method == HttpMethod.Options;
+
+            // Idempotent verbs: retry on 5xx/408/network errors.
+            // Non-idempotent verbs: retry only on network-layer failures (no response received),
+            // never on 5xx — the server may have already processed the write.
+            var builder = isIdempotent
+                ? HttpPolicyExtensions.HandleTransientHttpError().Or<TimeoutRejectedException>()
+                : Policy<HttpResponseMessage>.Handle<HttpRequestException>().Or<TimeoutRejectedException>();
+
+            return builder.WaitAndRetryAsync(
+                maxAttempts,
+                attempt => TimeSpan.FromMilliseconds(baseDelayMs * Math.Pow(2, attempt - 1))
+                           + TimeSpan.FromMilliseconds(Random.Shared.Next(0, 100)),
+                onRetry: (outcome, delay, attempt, _) =>
+                {
+                    if (outcome.Exception != null)
+                    {
+                        logger.LogWarning(
+                            "ExternalApi retry {Attempt}/{Max} for {Method} {Uri} after {Delay}ms: {Error}",
+                            attempt, maxAttempts, req.Method, req.RequestUri, delay.TotalMilliseconds,
+                            outcome.Exception.Message);
+                    }
+                    else
+                    {
+                        logger.LogWarning(
+                            "ExternalApi retry {Attempt}/{Max} for {Method} {Uri} after {Delay}ms: status {Status}",
+                            attempt, maxAttempts, req.Method, req.RequestUri, delay.TotalMilliseconds,
+                            (int)outcome.Result.StatusCode);
+                    }
+                });
+        }
+
+        private static IAsyncPolicy<HttpResponseMessage> BuildExternalApiPerAttemptTimeoutPolicy(IConfiguration cfg)
+        {
+            var seconds = cfg.GetValue("ExternalApi:Retry:PerAttemptTimeoutSeconds", 20);
+            return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(seconds));
         }
 
         private void ConfigureSwagger(IServiceCollection services)

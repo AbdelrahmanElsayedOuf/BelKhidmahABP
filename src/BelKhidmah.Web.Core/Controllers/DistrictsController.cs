@@ -17,6 +17,7 @@ namespace BelKhidmah.Controllers
         [HttpGet("DetectDistrict")]
         public Task<IActionResult> DetectDistrict()
             => ProxyAsync(BuildRequest(HttpMethod.Get, "api/districts/DetectDistrict"));
+
         [HttpGet("GetPolygonByDistrict")]
         public Task<IActionResult> GetPolygonByDistrict()
             => ProxyAsync(BuildRequest(HttpMethod.Get, "api/districts/GetPolygonByDistrict"));

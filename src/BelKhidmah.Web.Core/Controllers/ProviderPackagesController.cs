@@ -19,6 +19,10 @@ namespace BelKhidmah.Controllers
         public Task<IActionResult> AvailableMonths()
             => ProxyAsync(BuildRequest(HttpMethod.Get, "api/providerpackages/AvailableMonths"));
 
+        [HttpGet("SearchHistory")]
+        public Task<IActionResult> SearchHistory()
+            => ProxyAsync(BuildRequest(HttpMethod.Get, "api/providerpackages/SearchHistory"));
+
         [HttpGet("{packageId}/detail")]
         public Task<IActionResult> GetDetail([FromRoute] Guid packageId)
             => ProxyAsync(BuildRequest(HttpMethod.Get, $"api/providerpackages/{packageId}/detail"));
