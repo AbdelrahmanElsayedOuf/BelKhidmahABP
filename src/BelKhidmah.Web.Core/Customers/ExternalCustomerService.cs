@@ -1,8 +1,10 @@
 using System;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Abp.Dependency;
+using Abp.UI;
 using Castle.Core.Logging;
 using Microsoft.Extensions.Configuration;
 
@@ -28,44 +30,32 @@ namespace BelKhidmah.Customers
 
             var client = _httpClientFactory.CreateClient("ExternalApi");
 
-            const int maxAttempts = 3;
-            HttpResponseMessage response = null;
-
-            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            var request = new HttpRequestMessage(HttpMethod.Post, "en/api/BelkhidmahCustomers/Create")
             {
-                try
-                {
-                    var request = new HttpRequestMessage(HttpMethod.Post, "en/api/Customers/Create")
-                    {
-                        Content = JsonContent.Create(new { Name = name, Phone = phone, Email = email })
-                    };
+                Content = JsonContent.Create(new { Name = name, Phone = phone, Email = email })
+            };
 
-                    if (!string.IsNullOrEmpty(_apiKey))
-                        request.Headers.TryAddWithoutValidation("X-API-Key", _apiKey);
+            if (!string.IsNullOrEmpty(_apiKey))
+                request.Headers.TryAddWithoutValidation("X-API-Key", _apiKey);
 
-                    response = await client.SendAsync(request);
+            var response = await client.SendAsync(request);
 
-                    if (response.IsSuccessStatusCode)
-                        break;
+            var body = await response.Content.ReadAsStringAsync();
 
-                    Logger.WarnFormat("[ExternalCustomer] Create failed (attempt {0}/{1}). Status={2}", attempt, maxAttempts, (int)response.StatusCode);
-                }
-                catch (Exception ex)
-                {
-                    Logger.WarnFormat("[ExternalCustomer] Create threw on attempt {0}/{1}: {2}", attempt, maxAttempts, ex.Message);
-                }
+            if (!response.IsSuccessStatusCode)
+            {
+                // TEMP: surface the full readable response through VerifyCode (no logging access).
+                throw new UserFriendlyException(
+                    $"[ExternalCustomer] Create failed. Status={(int)response.StatusCode}, Body={body}");
             }
 
-            if (response == null || !response.IsSuccessStatusCode)
-                return null;
-
-            var x = await response.Content.ReadAsStringAsync();
-            var result = await response.Content.ReadFromJsonAsync<ExternalCreateResponse>();
+            var result = JsonSerializer.Deserialize<ExternalCreateResponse>(body,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (result?.Success != true || result.Data == Guid.Empty)
             {
-                Logger.WarnFormat("[ExternalCustomer] Response indicated failure or missing Id.");
-                return null;
+                // TEMP: surface the full readable response through VerifyCode (no logging access).
+                throw new UserFriendlyException($"[ExternalCustomer] Response indicated failure or missing Id. Body={body}");
             }
 
             return result.Data;

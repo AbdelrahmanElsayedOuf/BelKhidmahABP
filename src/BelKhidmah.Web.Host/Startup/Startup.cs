@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Reflection;
 using Microsoft.AspNetCore.Builder;
@@ -143,12 +144,14 @@ namespace BelKhidmah.Web.Host.Startup
                 || req.Method == HttpMethod.Head
                 || req.Method == HttpMethod.Options;
 
-            // Idempotent verbs: retry on 5xx/408/network errors.
-            // Non-idempotent verbs: retry only on network-layer failures (no response received),
+            // Idempotent verbs: retry on 5xx/408/400/network errors.
+            // Non-idempotent verbs: retry on 400 or network-layer failures (no response received),
             // never on 5xx — the server may have already processed the write.
+            Func<HttpResponseMessage, bool> isBadRequest = r => r.StatusCode == HttpStatusCode.BadRequest;
+
             var builder = isIdempotent
-                ? HttpPolicyExtensions.HandleTransientHttpError().Or<TimeoutRejectedException>()
-                : Policy<HttpResponseMessage>.Handle<HttpRequestException>().Or<TimeoutRejectedException>();
+                ? HttpPolicyExtensions.HandleTransientHttpError().OrResult(isBadRequest).Or<TimeoutRejectedException>()
+                : Policy<HttpResponseMessage>.Handle<HttpRequestException>().OrResult(isBadRequest).Or<TimeoutRejectedException>();
 
             return builder.WaitAndRetryAsync(
                 maxAttempts,
