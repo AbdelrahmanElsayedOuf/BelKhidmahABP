@@ -10,6 +10,7 @@ using Abp.Domain.Uow;
 using Abp.MultiTenancy;
 using Abp.Runtime.Session;
 using Abp.UI;
+using BelKhidmah.Authentication.Biometric;
 using BelKhidmah.Authentication.JwtBearer;
 using BelKhidmah.Authorization;
 using BelKhidmah.Authorization.Users;
@@ -35,6 +36,7 @@ namespace BelKhidmah.Authentication
         private readonly UserRegistrationManager _userRegistrationManager;
         private readonly ExternalCustomerService _externalCustomerService;
         private readonly JwtTokenBuilder _tokenBuilder;
+        private readonly BiometricManager _biometricManager;
 
         public IAbpSession AbpSession { get; set; } = NullAbpSession.Instance;
 
@@ -46,7 +48,8 @@ namespace BelKhidmah.Authentication
             UserManager userManager,
             UserRegistrationManager userRegistrationManager,
             ExternalCustomerService externalCustomerService,
-            JwtTokenBuilder tokenBuilder)
+            JwtTokenBuilder tokenBuilder,
+            BiometricManager biometricManager)
         {
             _logInManager = logInManager;
             _tenantCache = tenantCache;
@@ -56,6 +59,7 @@ namespace BelKhidmah.Authentication
             _userRegistrationManager = userRegistrationManager;
             _externalCustomerService = externalCustomerService;
             _tokenBuilder = tokenBuilder;
+            _biometricManager = biometricManager;
             LocalizationSourceName = BelKhidmahConsts.LocalizationSourceName;
         }
 
@@ -136,6 +140,69 @@ namespace BelKhidmah.Authentication
             await MarkUserVerifiedAsync(user, externalId);
 
             return _tokenBuilder.Build(user, _tokenBuilder.BuildIdentityForUser(user), externalId);
+        }
+
+        // ---------- Biometric ----------
+
+        public async Task<EnrollBiometricResult> EnrollBiometricAsync(EnrollBiometricInput model)
+        {
+            var userId = AbpSession.UserId
+                         ?? throw new UserFriendlyException("Authentication required.");
+
+            var keyId = await _biometricManager.EnrollAsync(
+                userId, model.DeviceId, model.DeviceName, model.PublicKey, model.KeyAlgorithm);
+
+            return new EnrollBiometricResult { KeyId = keyId };
+        }
+
+        public async Task<BiometricChallengeOutput> BiometricChallengeAsync(BiometricChallengeInput model)
+        {
+            var result = await _biometricManager.IssueChallengeAsync(model.KeyId);
+            return new BiometricChallengeOutput
+            {
+                KeyId = result.KeyId,
+                Nonce = result.Nonce,
+                ExpiresInSeconds = result.ExpiresInSeconds
+            };
+        }
+
+        public async Task<AuthenticateResultModel> BiometricVerifyAsync(BiometricVerifyInput model)
+        {
+            var user = await _biometricManager.VerifyAsync(model.KeyId, model.Nonce, model.Signature);
+            var externalId = await EnsureExternalCustomerAsync(user);
+
+            if (user.ExternalCustomerId != externalId)
+            {
+                user.ExternalCustomerId = externalId;
+                await _userManager.UpdateAsync(user);
+            }
+
+            return _tokenBuilder.Build(user, _tokenBuilder.BuildIdentityForUser(user), externalId);
+        }
+
+        public async Task<List<BiometricDeviceDto>> ListBiometricDevicesAsync()
+        {
+            var userId = AbpSession.UserId
+                         ?? throw new UserFriendlyException("Authentication required.");
+
+            var devices = await _biometricManager.ListDevicesAsync(userId);
+            return devices.Select(d => new BiometricDeviceDto
+            {
+                KeyId = d.Id,
+                DeviceId = d.DeviceId,
+                DeviceName = d.DeviceName,
+                KeyAlgorithm = d.KeyAlgorithm,
+                EnrolledAt = d.CreationTime,
+                LastUsedAt = d.LastUsedAt
+            }).ToList();
+        }
+
+        public async Task RevokeBiometricDeviceAsync(Guid keyId)
+        {
+            var userId = AbpSession.UserId
+                         ?? throw new UserFriendlyException("Authentication required.");
+
+            await _biometricManager.RevokeAsync(userId, keyId);
         }
 
         // ---------- Registration helpers ----------
