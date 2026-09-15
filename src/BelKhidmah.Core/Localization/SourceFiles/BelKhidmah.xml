@@ -124,5 +124,11 @@
     <text name="OtpSentToPhone" value="A verification code has been sent via SMS to {0}" />
     <text name="UserMustRegisterFirst" value="You do not have an account. Please register first." />
     <text name="AccountIsNotActive" value="Your account is not active." />
+    <text name="Biometric_KeyNotFound" value="Biometric key not found." />
+    <text name="Biometric_InvalidOrExpiredChallenge" value="Invalid or expired challenge." />
+    <text name="Biometric_SignatureVerificationFailed" value="Signature verification failed." />
+    <text name="Biometric_AccountNotActive" value="Account is no longer active." />
+    <text name="Biometric_NonceRequired" value="Nonce is required." />
+    <text name="Biometric_SignatureRequired" value="Signature is required." />
   </texts>
 </localizationDictionary>

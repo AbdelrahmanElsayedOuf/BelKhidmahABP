@@ -29,6 +29,7 @@ namespace BelKhidmah.Authentication.Biometric
             _keyRepository = keyRepository;
             _challengeRepository = challengeRepository;
             _userRepository = userRepository;
+            LocalizationSourceName = BelKhidmahConsts.LocalizationSourceName;
         }
 
         [UnitOfWork]
@@ -72,7 +73,9 @@ namespace BelKhidmah.Authentication.Biometric
         public virtual async Task<BiometricChallengeIssueResult> IssueChallengeAsync(Guid keyId)
         {
             var key = await _keyRepository.FirstOrDefaultAsync(k => k.Id == keyId && !k.IsDeleted)
-                       ?? throw new UserFriendlyException("Biometric key not found.");
+                       ?? throw new UserFriendlyException(
+                           (int)BiometricErrorCode.BiometricKeyNotFound,
+                           L("Biometric_KeyNotFound"));
 
             var nonceBytes = RandomNumberGenerator.GetBytes(NonceByteLength);
             var nonce = Convert.ToBase64String(nonceBytes);
@@ -100,18 +103,31 @@ namespace BelKhidmah.Authentication.Biometric
         [UnitOfWork]
         public virtual async Task<User> VerifyAsync(Guid keyId, string nonceBase64, string signatureBase64)
         {
-            if (string.IsNullOrWhiteSpace(nonceBase64)) throw new UserFriendlyException("Nonce is required.");
-            if (string.IsNullOrWhiteSpace(signatureBase64)) throw new UserFriendlyException("Signature is required.");
+            if (string.IsNullOrWhiteSpace(nonceBase64))
+                throw new UserFriendlyException(
+                    (int)BiometricErrorCode.NonceRequired,
+                    L("Biometric_NonceRequired"));
+
+            if (string.IsNullOrWhiteSpace(signatureBase64))
+                throw new UserFriendlyException(
+                    (int)BiometricErrorCode.SignatureRequired,
+                    L("Biometric_SignatureRequired"));
 
             var key = await _keyRepository.FirstOrDefaultAsync(k => k.Id == keyId && !k.IsDeleted)
-                       ?? throw new UserFriendlyException("Biometric key not found.");
+                       ?? throw new UserFriendlyException(
+                           (int)BiometricErrorCode.BiometricKeyNotFound,
+                           L("Biometric_KeyNotFound"));
 
             var challenge = await _challengeRepository.FirstOrDefaultAsync(c =>
                 c.KeyId == keyId && c.Nonce == nonceBase64 && !c.IsUsed && c.ExpiresAt > DateTime.UtcNow)
-                            ?? throw new UserFriendlyException("Invalid or expired challenge.");
+                            ?? throw new UserFriendlyException(
+                                (int)BiometricErrorCode.InvalidOrExpiredChallenge,
+                                L("Biometric_InvalidOrExpiredChallenge"));
 
             if (!VerifySignature(key.PublicKey, nonceBase64, signatureBase64))
-                throw new UserFriendlyException("Signature verification failed.");
+                throw new UserFriendlyException(
+                    (int)BiometricErrorCode.SignatureVerificationFailed,
+                    L("Biometric_SignatureVerificationFailed"));
 
             challenge.IsUsed = true;
             await _challengeRepository.UpdateAsync(challenge);
@@ -126,7 +142,9 @@ namespace BelKhidmah.Authentication.Biometric
             }
 
             if (user == null || !user.IsActive)
-                throw new UserFriendlyException("Account is no longer active.");
+                throw new UserFriendlyException(
+                    (int)BiometricErrorCode.AccountNotActive,
+                    L("Biometric_AccountNotActive"));
 
             return user;
         }

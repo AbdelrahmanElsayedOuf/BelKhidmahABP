@@ -124,5 +124,11 @@
     <text name="OtpSentToPhone" value="تم إرسال رمز التحقق عبر رسالة نصية إلى {0}" />
     <text name="UserMustRegisterFirst" value="ليس لديك حساب. يرجى التسجيل أولاً." />
     <text name="AccountIsNotActive" value="حسابك غير مفعَّل." />
+    <text name="Biometric_KeyNotFound" value="لم يتم العثور على المفتاح البيومتري." />
+    <text name="Biometric_InvalidOrExpiredChallenge" value="التحدي غير صالح أو منتهي الصلاحية." />
+    <text name="Biometric_SignatureVerificationFailed" value="فشل التحقق من التوقيع الرقمي." />
+    <text name="Biometric_AccountNotActive" value="الحساب لم يعد نشطًا." />
+    <text name="Biometric_NonceRequired" value="الرمز العشوائي مطلوب." />
+    <text name="Biometric_SignatureRequired" value="التوقيع الرقمي مطلوب." />
   </texts>
 </localizationDictionary>
